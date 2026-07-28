@@ -1,0 +1,118 @@
+name: Gradle Build
+
+# Reusable. Called by the 9 Java repos' gradle-build.yml stubs.
+#
+# Deliberately does NOT publish a check run. The build job runs contributor-supplied
+# build.gradle logic, so it holds contents:read + id-token:write and nothing else.
+# Test results are uploaded as an artifact and reported out-of-band by test-report.yml,
+# which runs on workflow_run against the base repo. That split is the security point of
+# this migration.
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: 'JDK major version.'
+        type: string
+        default: '21'
+      java-distribution:
+        type: string
+        default: 'temurin'
+      gradle-args:
+        description: 'Arguments passed to ./gradlew.'
+        type: string
+        default: 'build'
+      runs-on:
+        type: string
+        default: 'ubuntu-latest'
+      timeout-minutes:
+        description: 'Job timeout. Must be an input — `timeout-minutes` is not allowed on a `uses:` job.'
+        type: number
+        default: 30
+      upload-test-results:
+        description: 'Upload test results as an artifact for the workflow_run reporter.'
+        type: boolean
+        default: true
+      test-results-artifact:
+        type: string
+        default: 'test-results'
+      test-results-path:
+        type: string
+        default: 'build/test-results/**/*.xml'
+      run-codecov:
+        type: boolean
+        default: true
+      codecov-slug:
+        description: 'Codecov slug. Empty => github.repository, which inside a called workflow is the CALLER repo.'
+        type: string
+        default: ''
+    secrets:
+      PACKAGES_ACTOR:
+        description: 'Actor for resolving GitHub Packages Maven deps. Omit if the project has no private deps.'
+        required: false
+      PACKAGES_TOKEN:
+        description: 'read:packages token. Omit if the project has no private deps.'
+        required: false
+      CODECOV_TOKEN:
+        description: 'Only needed if OIDC upload is not configured for this repo in Codecov.'
+        required: false
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read   # checkout
+      id-token: write  # Codecov OIDC
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      - name: Set up JDK ${{ inputs.java-version }}
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          java-version: ${{ inputs.java-version }}
+          distribution: ${{ inputs.java-distribution }}
+          cache: 'gradle'
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+        with:
+          cache-provider: basic
+
+      # If PACKAGES_* were not passed these resolve to empty strings, which is
+      # exactly right for projects with no GitHub Packages dependencies.
+      - name: Build with Gradle
+        env:
+          GITHUB_ACTOR: ${{ secrets.PACKAGES_ACTOR }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+          GRADLE_ARGS: ${{ inputs.gradle-args }}
+        run: ./gradlew $GRADLE_ARGS
+
+      - name: Upload test results
+        if: ${{ inputs.upload-test-results && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.test-results-artifact }}
+          path: ${{ inputs.test-results-path }}
+
+      - name: Upload coverage reports to Codecov
+        if: ${{ inputs.run-codecov && !cancelled() }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          use_oidc: true
+          slug: ${{ inputs.codecov-slug != '' && inputs.codecov-slug || github.repository }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

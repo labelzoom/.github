@@ -1,0 +1,7 @@
+{
+  "name": "LabelZoom Node Build",
+  "description": "Install, build and test an npm project via the shared labelzoom/.github reusable workflow.",
+  "iconName": "example-icon",
+  "categories": ["JavaScript", "TypeScript", "Continuous integration"],
+  "filePatterns": ["^package\\.json$"]
+}

@@ -1,0 +1,57 @@
+name: Release
+
+# Cuts a vX.Y.Z tag and moves the vX major alias that all 16 consumer repos pin to.
+#
+# This is the control that makes `@v1` materially different from `@main`: merging to
+# main is NOT a release. Promoting a commit to the ref that 16 repos execute is a
+# separate, deliberate, reviewed, audited act gated by the `release` environment's
+# required reviewers.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Full semver tag to cut, e.g. v1.3.0'
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release   # required-reviewers gate
+    permissions:
+      contents: write
+    steps:
+      # persist-credentials stays ON here, unlike every other checkout in this repo:
+      # the tag push below authenticates with the credentials checkout writes into
+      # .git/config. Accepted because this job runs nothing but the script below and
+      # is gated behind the `release` environment's required reviewers.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # zizmor: ignore[artipacked]
+        with:
+          fetch-depth: 0
+
+      - name: Cut version tag and move the major alias
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          case "$VERSION" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::version must look like v1.2.3"; exit 1 ;;
+          esac
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "::error::tag $VERSION already exists; versions are immutable, pick a new one"
+            exit 1
+          fi
+          MAJOR="${VERSION%%.*}"
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$VERSION" -m "$VERSION"
+          git tag -f -a "$MAJOR" -m "$MAJOR -> $VERSION"
+          git push origin "$VERSION"
+          git push origin -f "$MAJOR"
+          echo "Cut $VERSION and moved $MAJOR to $(git rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"

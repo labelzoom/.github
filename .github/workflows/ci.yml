@@ -1,0 +1,66 @@
+name: CI
+
+# This repo's own CI. Everything here is callable by 16 other repos, so it gets
+# linted harder than anything it serves. The `ci` check is required by the branch
+# ruleset on main.
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Downloaded and checksum-verified rather than pulled as an action: this repo
+      # models the pinning rules it enforces, and a mutable docker tag would not.
+      - name: actionlint
+        env:
+          ACTIONLINT_VERSION: '1.7.7'
+          ACTIONLINT_SHA256: '023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757'
+        run: |
+          set -euo pipefail
+          url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o actionlint.tgz "$url"
+          echo "${ACTIONLINT_SHA256}  actionlint.tgz" | sha256sum -c -
+          tar xzf actionlint.tgz actionlint
+          ./actionlint -color
+
+      - name: zizmor
+        env:
+          ZIZMOR_VERSION: '1.11.0'
+          ZIZMOR_SHA256: 'da35e666827cbb1e6ca98b18b7969657b9f186467bfebfa25e730aac527c36f8'
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL -o zizmor.tgz "$url"
+          echo "${ZIZMOR_SHA256}  zizmor.tgz" | sha256sum -c -
+          tar xzf zizmor.tgz
+          ./zizmor --format plain --min-severity medium --min-confidence low .github/workflows/
+
+      - name: Assert every reusable workflow declares permissions
+        run: |
+          set -euo pipefail
+          rc=0
+          for f in .github/workflows/*.yml; do
+            grep -q '^permissions:' "$f" || { echo "::error file=$f::missing top-level permissions:"; rc=1; }
+          done
+          exit $rc

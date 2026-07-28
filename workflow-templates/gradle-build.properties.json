@@ -1,0 +1,7 @@
+{
+  "name": "LabelZoom Gradle Build",
+  "description": "Build and test a Java 21 Gradle project via the shared labelzoom/.github reusable workflow.",
+  "iconName": "example-icon",
+  "categories": ["Java", "Continuous integration"],
+  "filePatterns": ["^build\\.gradle$", "^settings\\.gradle$"]
+}
