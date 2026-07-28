@@ -1,0 +1,56 @@
+name: Test Report
+
+# Reusable. Called by each repo's test-report.yml stub.
+#
+# Why the trigger is NOT here: a workflow is only reusable if `on` includes
+# `workflow_call`, and `workflow_run` cannot make a workflow reusable. So the
+# `workflow_run` trigger and its conclusion guard stay in the caller stub, and the
+# stub's single job calls this.
+#
+# This works because inside a called workflow the `github` context is the CALLER's,
+# so `github.event.workflow_run.*` is fully populated and dorny/test-reporter finds
+# the artifact on the triggering run with no input plumbing.
+
+on:
+  workflow_call:
+    inputs:
+      artifact:
+        description: 'Name of the artifact uploaded by the build workflow.'
+        type: string
+        default: 'test-results'
+      check-name:
+        description: 'Name of the check run to create.'
+        type: string
+        default: 'JUnit Tests'
+      path:
+        description: 'Glob for result files INSIDE the downloaded artifact.'
+        type: string
+        default: '**/*.xml'
+      reporter:
+        description: 'dorny/test-reporter format (java-junit, jest-junit, dotnet-trx, golang-json, ...).'
+        type: string
+        default: 'java-junit'
+      timeout-minutes:
+        type: number
+        default: 5
+
+permissions: {}
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read  # action repo access
+      actions: read   # download the artifact from the triggering run
+      checks: write   # publish the check run
+    steps:
+      # pull-requests: write is deliberately absent — with use-actions-summary: false
+      # this publishes a check run and never comments on a PR.
+      - uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        with:
+          artifact: ${{ inputs.artifact }}
+          name: ${{ inputs.check-name }}
+          path: ${{ inputs.path }}
+          reporter: ${{ inputs.reporter }}
+          use-actions-summary: false

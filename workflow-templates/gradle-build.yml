@@ -1,0 +1,25 @@
+# Caller stub. All logic lives in labelzoom/.github — keep this file thin.
+name: Gradle Build
+
+on:
+  push:
+    branches: [ "$default-branch" ]
+  pull_request:
+    branches: [ "$default-branch" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  build:
+    uses: labelzoom/.github/.github/workflows/gradle-build.yml@v1
+    permissions:
+      contents: read   # checkout
+      id-token: write  # Codecov OIDC
+    # Drop this block entirely if the project has no GitHub Packages dependencies.
+    secrets:
+      PACKAGES_ACTOR: ${{ secrets.ACTION_ACTOR }}
+      PACKAGES_TOKEN: ${{ secrets.ACTION_TOKEN }}

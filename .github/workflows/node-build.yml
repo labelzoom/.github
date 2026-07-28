@@ -1,0 +1,123 @@
+name: Node Build
+
+# Reusable. Called by the npm repos' build.yml stubs.
+#
+# Two defects in the fleet are fixed structurally here rather than by hand-editing:
+#   - test-results-path defaults to where vitest's junit reporter actually writes,
+#     killing the bare `junit-report.xml` that matched nothing.
+#   - node-version-file: .nvmrc makes the committed .nvmrc files authoritative for the
+#     first time, so a Node upgrade becomes a one-line PR instead of a workflow edit.
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Explicit version. Leave empty to use node-version-file (preferred).'
+        type: string
+        default: ''
+      node-version-file:
+        description: 'Version file. Default .nvmrc makes the committed .nvmrc authoritative.'
+        type: string
+        default: '.nvmrc'
+      install-command:
+        type: string
+        default: 'npm ci'
+      build-command:
+        type: string
+        default: 'npm run build --if-present'
+      test-command:
+        type: string
+        default: 'npm test'
+      runs-on:
+        type: string
+        default: 'ubuntu-latest'
+      timeout-minutes:
+        type: number
+        default: 10
+      upload-test-results:
+        type: boolean
+        default: true
+      test-results-artifact:
+        type: string
+        default: 'test-results'
+      test-results-path:
+        description: 'Where the junit reporter writes. vitest in this org => test-results/junit-report.xml'
+        type: string
+        default: 'test-results/**/*.xml'
+      test-results-if-none:
+        description: 'upload-artifact if-no-files-found. Use `ignore` where `npm test` is still a stub.'
+        type: string
+        default: 'warn'
+      run-codecov:
+        type: boolean
+        default: false
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+      id-token: write  # Codecov OIDC (unused when run-codecov is false)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # setup-node prefers node-version when both are set and ignores an empty one,
+      # so passing both is safe. Callers that must pin explicitly pass node-version
+      # and node-version-file: ''.
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: 'npm'
+
+      # shellcheck disable is deliberate on all three: these inputs are command
+      # lines (`npm run build --if-present`), so word splitting is the point.
+      - name: Install
+        env:
+          CMD: ${{ inputs.install-command }}
+        run: |
+          # shellcheck disable=SC2086
+          $CMD
+
+      - name: Build
+        env:
+          CMD: ${{ inputs.build-command }}
+        run: |
+          # shellcheck disable=SC2086
+          $CMD
+
+      - name: Test
+        env:
+          CMD: ${{ inputs.test-command }}
+        run: |
+          # shellcheck disable=SC2086
+          $CMD
+
+      - name: Upload test results
+        if: ${{ inputs.upload-test-results && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.test-results-artifact }}
+          path: ${{ inputs.test-results-path }}
+          if-no-files-found: ${{ inputs.test-results-if-none }}
+
+      - name: Upload coverage reports to Codecov
+        if: ${{ inputs.run-codecov && !cancelled() }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          use_oidc: true
+          slug: ${{ github.repository }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

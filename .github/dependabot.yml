@@ -1,0 +1,25 @@
+# Applies to THIS repo only — dependabot.yml does not inherit org-wide.
+#
+# This is the point of the whole migration: one grouped PR here moves the pinned
+# action SHAs for all 16 consumer repos at once, instead of 17 independent PRs
+# landing on different days and drifting apart.
+#
+# Grouping also keeps gradle-build.yml and gradle-publish.yml moving together. They
+# duplicate the same five setup steps, and that duplication is only safe because a
+# grouped PR guarantees they never diverge.
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      actions-all:
+        patterns:
+          - "*"

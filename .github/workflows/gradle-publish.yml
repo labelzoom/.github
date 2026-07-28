@@ -1,0 +1,117 @@
+name: Gradle Publish
+
+# Reusable. Called by the 9 Java repos' gradle-publish.yml stubs on `release: created`.
+#
+# Collapses the drift catalogued in the July 2026 audit: permissions present/absent,
+# `build` vs `publish` job id, 4- vs 6-space indentation, setup-java v5.4.0/v5.5.0/v5.6.0,
+# checkout v7.0.0/v7.0.1.
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        type: string
+        default: '21'
+      java-distribution:
+        type: string
+        default: 'temurin'
+      version-prefix:
+        description: 'Prefix stripped from the release tag to derive the version.'
+        type: string
+        default: 'v'
+      upload-jars:
+        type: boolean
+        default: false
+      jar-path:
+        type: string
+        default: 'build/libs/*.jar'
+      jar-retention-days:
+        type: number
+        default: 30
+      timeout-minutes:
+        type: number
+        default: 30
+    secrets:
+      PACKAGES_ACTOR:
+        required: false
+      PACKAGES_TOKEN:
+        required: false
+    outputs:
+      release-version:
+        description: 'Version derived from the release tag (tag minus version-prefix).'
+        value: ${{ jobs.set-version.outputs.release_version }}
+
+permissions: {}
+
+jobs:
+  set-version:
+    runs-on: ubuntu-latest
+    permissions: {}  # Only computes an output string; needs no token scopes
+    outputs:
+      release_version: ${{ steps.version.outputs.release_version }}
+    steps:
+      - id: version
+        env:
+          PREFIX: ${{ inputs.version-prefix }}
+        run: |
+          # $PREFIX must be quoted inside ${..#..}: unquoted it is treated as a glob
+          # pattern, so a prefix containing [ ? or * would strip the wrong thing.
+          echo "release_version=${GITHUB_REF_NAME#"$PREFIX"}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Build and Publish Package
+    runs-on: ubuntu-latest
+    needs: [set-version]
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      - name: Set up JDK ${{ inputs.java-version }}
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          java-version: ${{ inputs.java-version }}
+          distribution: ${{ inputs.java-distribution }}
+          cache: 'gradle'
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+        with:
+          cache-provider: basic
+
+      - name: Build with Gradle
+        env:
+          GITHUB_ACTOR: ${{ secrets.PACKAGES_ACTOR }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+          RELEASE_VERSION: ${{ needs.set-version.outputs.release_version }}
+        run: ./gradlew build -PprojectVersion="$RELEASE_VERSION"
+
+      - name: Upload build artifacts
+        if: ${{ inputs.upload-jars }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: build-artifacts
+          path: ${{ inputs.jar-path }}
+          retention-days: ${{ inputs.jar-retention-days }}
+
+      # GITHUB_ACTOR/GITHUB_TOKEN must match the credential env vars in build.gradle's
+      # publishing block. secrets.GITHUB_TOKEN here is minted for the CALLER's run, so
+      # this publishes to the caller repo's GitHub Packages.
+      - name: Publish to GitHub Packages
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.set-version.outputs.release_version }}
+        run: ./gradlew publish -PprojectVersion="$RELEASE_VERSION"
