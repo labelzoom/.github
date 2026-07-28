@@ -54,7 +54,9 @@ jobs:
         env:
           PREFIX: ${{ inputs.version-prefix }}
         run: |
-          echo "release_version=${GITHUB_REF_NAME#$PREFIX}" >> "$GITHUB_OUTPUT"
+          # $PREFIX must be quoted inside ${..#..}: unquoted it is treated as a glob
+          # pattern, so a prefix containing [ ? or * would strip the wrong thing.
+          echo "release_version=${GITHUB_REF_NAME#"$PREFIX"}" >> "$GITHUB_OUTPUT"
 
   publish:
     name: Build and Publish Package

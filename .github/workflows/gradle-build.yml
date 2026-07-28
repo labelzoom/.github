@@ -99,7 +99,9 @@ jobs:
           GITHUB_ACTOR: ${{ secrets.PACKAGES_ACTOR }}
           GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
           GRADLE_ARGS: ${{ inputs.gradle-args }}
-        run: ./gradlew $GRADLE_ARGS
+        run: |
+          # shellcheck disable=SC2086  # gradle-args is an argument list; splitting is the point
+          ./gradlew $GRADLE_ARGS
 
       - name: Upload test results
         if: ${{ inputs.upload-test-results && !cancelled() }}

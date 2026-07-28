@@ -82,20 +82,28 @@ jobs:
           node-version-file: ${{ inputs.node-version-file }}
           cache: 'npm'
 
+      # shellcheck disable is deliberate on all three: these inputs are command
+      # lines (`npm run build --if-present`), so word splitting is the point.
       - name: Install
         env:
           CMD: ${{ inputs.install-command }}
-        run: $CMD
+        run: |
+          # shellcheck disable=SC2086
+          $CMD
 
       - name: Build
         env:
           CMD: ${{ inputs.build-command }}
-        run: $CMD
+        run: |
+          # shellcheck disable=SC2086
+          $CMD
 
       - name: Test
         env:
           CMD: ${{ inputs.test-command }}
-        run: $CMD
+        run: |
+          # shellcheck disable=SC2086
+          $CMD
 
       - name: Upload test results
         if: ${{ inputs.upload-test-results && !cancelled() }}
