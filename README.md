@@ -45,8 +45,7 @@ the contract.
   reusable workflow mirrors them.
 - **Third-party actions are pinned to a full commit SHA** with a `# vX.Y.Z` comment.
   `ci.yml` fails if that ever regresses.
-- `persist-credentials: false` on every checkout except `release.yml`, which needs the
-  credentials to push tags and documents that exception inline.
+- `persist-credentials: false` on every checkout, with no exceptions.
 
 Two syntax constraints that surprise people: a `uses:` job **cannot** set
 `timeout-minutes`, `runs-on`, `env`, `services` or `steps` — each has to be an input. And
@@ -55,8 +54,8 @@ lives in the caller stub while the shared job lives here.
 
 ## Versioning: `@v1` is a moving tag
 
-Consumers pin `@v1`. `v1` is moved only by `release.yml`, which is gated behind the
-`release` environment's required reviewers.
+Consumers pin `@v1`. `v1` is moved only by [`script/cut-release.sh`](script/cut-release.sh),
+run locally by a member of `@labelzoom/labelzoom`.
 
 This is deliberate, and it is *not* the same as `@main`:
 
@@ -69,11 +68,16 @@ This is deliberate, and it is *not* the same as `@main`:
   control for third-party code you cannot govern; it is the wrong one for a repo you own
   and can put a ruleset on.
 
-`@v1` is made safe by hardening *this repo* instead of freezing the ref: a branch ruleset
-on `main` requiring PR + code-owner review + the `ci` check with no bypass actors, a `v*`
-tag ruleset, and the reviewer-gated `release` environment. **Merging to `main` is not a
-release.** Promoting a commit to the ref that 16 repos execute is a separate, deliberate,
-audited act.
+`@v1` is made safe by hardening *this repo* instead of freezing the ref:
+
+- **`main` requires a PR** with code-owner review and a passing `ci` check, and the org
+  ruleset has an empty bypass list — nobody pushes to `main`, org owner included.
+- **A `v*` tag ruleset restricts creation, update and deletion** to
+  `@labelzoom/labelzoom`. Accounts with plain write access — notably automation and agent
+  accounts — cannot create or move a version tag at all.
+
+**Merging to `main` is not a release.** Promoting a commit to the ref that 16 repos
+execute is a separate, deliberate act performed by a human at a terminal.
 
 Consumers must tell Dependabot to leave the moving tag alone, or it will "helpfully" pin
 `@v1` to `@v1.3.0`:
@@ -89,9 +93,24 @@ default, or a new required secret means cutting `v2` and migrating consumers rep
 
 ## Cutting a release
 
-Actions → **Release** → Run workflow → `v1.3.0`. It validates the format, refuses to
-overwrite an existing version tag, creates `v1.3.0`, and force-moves `v1` to the same
-commit.
+```sh
+git switch main && git pull
+./script/cut-release.sh v1.3.0
+```
+
+It refuses to run unless you are on a clean `main` level with `origin/main`, validates the
+tag format, refuses to overwrite an existing version tag, prompts for confirmation, then
+creates `v1.3.0` and force-moves `v1` onto the same commit.
+
+**Why this is a script and not a workflow.** The `v*` tag ruleset restricts creation and
+update, and GitHub Actions cannot be granted a bypass — the API rejects it outright:
+
+> Actor GitHub Actions integration must be part of the ruleset source or owner organization
+
+Actions is built into the platform rather than installed as an org integration, so it can
+never satisfy that. Only a *custom* org-owned GitHub App could bypass, and that means
+storing a private key in order to automate two `git` commands. That trade isn't worth it,
+so the release stays manual and the ruleset stays strict.
 
 ## What inherits org-wide, and what does not
 
