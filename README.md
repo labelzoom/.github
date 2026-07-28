@@ -27,7 +27,7 @@ This trips up every reviewer once. It is not a typo.
 |---|---|---|
 | `gradle-build.yml` | Build + test a Java project, upload test results, Codecov | `contents: read`, `id-token: write` |
 | `gradle-publish.yml` | Build + publish to GitHub Packages on `release: created` | `contents: read`, `packages: write` |
-| `node-build.yml` | `npm ci` / build / test, upload test results | `contents: read` (+ `id-token: write` if `run-codecov`) |
+| `node-build.yml` | `npm ci` / build / test, upload test results | `contents: read`, `id-token: write` (**both always**) |
 | `test-report.yml` | Publish a JUnit check run from an uploaded artifact | `contents: read`, `actions: read`, `checks: write` |
 
 Inputs are documented inline in each file — read the `workflow_call.inputs` block, it is
@@ -124,3 +124,19 @@ so the release stays manual and the ruleset stays strict.
 | `.github/dependabot.yml` | **No.** Each repo keeps its own |
 | `CODEOWNERS` | **No.** Each repo keeps its own |
 | `LICENSE` | **No** — explicitly unsupported by GitHub |
+
+## Caller permissions are not inherited — declare them
+
+A called workflow's job permissions must be **equal to or more restrictive** than the
+caller job's. Two consequences, both verified the hard way:
+
+- **Grant at least what the reusable workflow declares.** Granting less is not a warning
+  or a downgrade — the run dies with `startup_failure` before any job begins, and the
+  Actions UI says only "This run likely failed because of a workflow file issue."
+- **Omitting `permissions:` in the reusable workflow does not inherit the caller's.**
+  The job falls back to `Metadata: read`, and even `actions/checkout` fails with
+  `Repository not found` on a private repo.
+
+So the tables above are minimums *and* requirements. `node-build.yml` needs
+`id-token: write` from every caller even when `run-codecov` is false, because a static
+permissions block cannot vary with an input.

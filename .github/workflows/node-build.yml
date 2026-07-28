@@ -62,9 +62,15 @@ jobs:
     name: Build and Test
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    # id-token: write is declared unconditionally, and every caller must grant it.
+    # A called workflow's permissions can only be equal to or MORE restrictive than
+    # the caller's, and a static block cannot vary with `run-codecov`. Declaring
+    # only contents: read would silently cap Codecov callers and stop their uploads;
+    # omitting the block entirely does NOT inherit the caller's grant -- the job
+    # drops to `Metadata: read` and even checkout fails. Verified both ways.
     permissions:
       contents: read
-      id-token: write  # Codecov OIDC (unused when run-codecov is false)
+      id-token: write  # Codecov OIDC; unused when run-codecov is false
 
     steps:
       - name: Checkout code
