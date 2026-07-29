@@ -88,6 +88,25 @@ jobs:
           node-version-file: ${{ inputs.node-version-file }}
           cache: 'npm'
 
+      # @types/node's major must track the Node runtime, and .nvmrc is that
+      # source of truth (it drives setup-node above, the Cloudflare Workers
+      # build, and local fnm). This catches the drift where the ambient Node
+      # types run ahead of / behind the version actually deployed. Reads only
+      # package.json + .nvmrc, so it needs no install; skipped when either the
+      # file or the dependency is absent.
+      - name: Check @types/node major matches .nvmrc
+        if: ${{ hashFiles('.nvmrc') != '' }}
+        run: |
+          nvmrc_major="$(sed -E 's/^v//; s/\..*//' .nvmrc)"
+          range="$(node -p "const p=require('./package.json');(p.devDependencies&&p.devDependencies['@types/node'])||(p.dependencies&&p.dependencies['@types/node'])||''")"
+          if [ -z "$range" ]; then echo "No @types/node dependency; nothing to check."; exit 0; fi
+          types_major="$(printf '%s' "$range" | grep -oE '[0-9]+' | head -1)"
+          echo ".nvmrc major=$nvmrc_major  @types/node=$range (major=$types_major)"
+          if [ "$nvmrc_major" != "$types_major" ]; then
+            echo "::error file=package.json::@types/node major ($types_major) does not match .nvmrc Node major ($nvmrc_major). Bump @types/node to ^${nvmrc_major} (or change .nvmrc)."
+            exit 1
+          fi
+
       # shellcheck disable is deliberate on all three: these inputs are command
       # lines (`npm run build --if-present`), so word splitting is the point.
       - name: Install
