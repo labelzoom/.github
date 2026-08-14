@@ -14,7 +14,7 @@ on:
       java-version:
         description: 'JDK major version.'
         type: string
-        default: '21'
+        default: '25'
       java-distribution:
         type: string
         default: 'temurin'
