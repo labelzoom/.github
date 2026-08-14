@@ -11,7 +11,7 @@ on:
     inputs:
       java-version:
         type: string
-        default: '21'
+        default: '25'
       java-distribution:
         type: string
         default: 'temurin'
