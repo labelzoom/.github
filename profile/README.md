@@ -11,7 +11,7 @@ render labels to images, and design them in the browser — at
 | | |
 |---|---|
 | [labelzoom-api](https://github.com/labelzoom/labelzoom-api) | The label data model and the `LabelReader` / `LabelWriter` contracts every format adapter implements |
-| [labelzoom-zpl-sdk](https://github.com/labelzoom/labelzoom-zpl-sdk) | Client SDK for the LabelZoom conversion API |
+| [labelzoom-sdk](https://github.com/labelzoom/labelzoom-sdk) | Client SDK for the LabelZoom conversion API |
 
 ## Docs and API
 
