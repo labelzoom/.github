@@ -3,11 +3,11 @@
 Org-level GitHub configuration: the **reusable workflows** every LabelZoom repo's CI
 calls, plus the community health files that inherit across the org.
 
-This repo is **public**, and that is load-bearing, not an oversight. `labelzoom-api` and
-`labelzoom-zpl-sdk` are public repos, and **a public repo cannot call a reusable workflow
-from a private one.** No setting changes that. Nothing secret lives here: workflow YAML,
-secret *names*, toolchain versions and action SHAs are all public by design. Secret
-*values* never are.
+This repo is **public**, and that is load-bearing, not an oversight. Several org repos are
+public — `labelzoom-sdk`, `labelzoom-mcp` and `labelzoom-n8n-node` among them — and **a
+public repo cannot call a reusable workflow from a private one.** No setting changes that.
+Nothing secret lives here: workflow YAML, secret *names*, toolchain versions and action
+SHAs are all public by design. Secret *values* never are.
 
 ## The doubled path
 
