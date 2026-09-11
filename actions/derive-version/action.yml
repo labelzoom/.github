@@ -1,0 +1,69 @@
+name: 'Derive version'
+description: >-
+  Derive a release version from the current ref. On a tag matching
+  refs/tags/<prefix>*, the version is the tag minus the prefix; on anything else it
+  is 0.0.0-<sha7>, so a branch build still produces something sortable and traceable.
+  `numeric` drops any -suffix, for the several consumers that reject anything but a
+  bare x.y.z.
+
+inputs:
+  prefix:
+    description: 'Tag prefix stripped to produce the version. e.g. v, desktop-v'
+    required: false
+    default: 'v'
+
+outputs:
+  version:
+    description: 'Full version. 1.2.3 on a tag, 0.0.0-1a2b3c4 otherwise.'
+    value: ${{ steps.derive.outputs.version }}
+  numeric:
+    description: >-
+      Version with any -suffix dropped, always x.y.z. Inno Setup VersionInfoVersion,
+      Windows VERSIONINFO/AssemblyVersion, MSIX and tauri.conf.json all reject a
+      prerelease suffix.
+    value: ${{ steps.derive.outputs.numeric }}
+
+runs:
+  using: composite
+  steps:
+    # bash, not pwsh, even though every current caller but one is windows-latest.
+    # `shell: bash` there is Git Bash (--noprofile --norc -eo pipefail), where
+    # ${VAR:0:7} and ${VAR#"$PREFIX"} behave exactly as they do on Linux. Two reasons
+    # it is the better choice:
+    #
+    #   - It writes LF. pwsh `Out-File -Append` writes CRLF, and at least one caller
+    #     exact-string-compares `numeric` against a built binary's VERSIONINFO.
+    #   - The pwsh original used `-replace '^v',''`, a REGEX. Harmless for `v` and
+    #     `desktop-v`, but `prefix` is a caller-supplied input now, and a prefix
+    #     carrying . + [ would silently strip the wrong thing.
+    - id: derive
+      shell: bash
+      env:
+        PREFIX: ${{ inputs.prefix }}
+      run: |
+        set -euo pipefail
+
+        # Test the FULL ref, not GITHUB_REF_NAME. Callers run this on pushes to their
+        # default branch and on pull requests as well as on tags, so branch refs reach
+        # this code -- and a branch named v1.2.3 must not be mistaken for a release.
+        #
+        # "$PREFIX" is quoted inside ${..#..} for the same reason the regex was
+        # dropped: unquoted it is a glob pattern.
+        case "$GITHUB_REF" in
+          refs/tags/"$PREFIX"*) ver="${GITHUB_REF_NAME#"$PREFIX"}" ;;
+          *)                    ver="0.0.0-${GITHUB_SHA:0:7}" ;;
+        esac
+
+        numeric="${ver%%-*}"
+
+        # Deliberately fatal. A malformed version used to surface much later as a
+        # cryptic installer-compiler parse error, or as an invalid 4-part MSIX
+        # version -- minutes into a job that bills at 2x. Fail here instead.
+        if ! printf '%s' "$numeric" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+          echo "::error::derived numeric version '$numeric' is not x.y.z (ref=$GITHUB_REF prefix=$PREFIX)"
+          exit 1
+        fi
+
+        echo "version=$ver"     >> "$GITHUB_OUTPUT"
+        echo "numeric=$numeric" >> "$GITHUB_OUTPUT"
+        echo "version=$ver numeric=$numeric"

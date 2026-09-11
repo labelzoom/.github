@@ -14,6 +14,18 @@
 #
 # So promoting a commit to the ref that every consumer repo executes is an
 # explicit, local, human act. Which is the semantic we wanted anyway.
+#
+# UNDOING ONE. There is no reverse subcommand, on purpose: version tags are
+# immutable and this script only ever cuts from HEAD of main. But the major alias
+# is not immutable, and if a bad cut is live in 16 repos you do not want to be
+# working that out from first principles. The lever is:
+#
+#   git push origin -f v1 <known-good-sha>
+#
+# which the `v*` ruleset restricts to a human with bypass -- the same restriction
+# that keeps Actions out of this script. Move the alias back first, then fix
+# forward with a normal PR and a new patch cut. Do not delete the bad version tag;
+# leaving it is what makes the history legible.
 
 set -euo pipefail
 

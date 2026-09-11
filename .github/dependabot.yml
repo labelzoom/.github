@@ -11,7 +11,13 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # `directory: "/"` covers .github/workflows/ plus an action.yml at the repo root,
+    # and nothing else -- so composite actions under actions/ were invisible to it.
+    # They pin action SHAs the same way the workflows do, and this file exists so
+    # those SHAs never drift.
+    directories:
+      - "/"
+      - "/actions/*"
     schedule:
       interval: "weekly"
       day: "monday"
