@@ -45,9 +45,39 @@ jobs:
       actions: read   # download the artifact from the triggering run
       checks: write   # publish the check run
     steps:
+      # A build that fails BEFORE running tests uploads nothing, and
+      # dorny/test-reporter treats an absent artifact as an error. That turns one
+      # honest red X on the build into two, the second saying nothing the first did
+      # not. Probing first means the reporter runs only when there is something to
+      # report.
+      #
+      # This lives here rather than in a caller's own `probe` job for the reason the
+      # whole file exists: as a separate job it would cost a full billed minute to
+      # avoid spending a different one. As a step it reuses this job's runner, costs
+      # nothing, and every caller gets it instead of just the one that wrote it.
+      - name: Look for the artifact on the triggering run
+        id: probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REPO: ${{ github.repository }}
+          ARTIFACT: ${{ inputs.artifact }}
+        run: |
+          set -euo pipefail
+          count="$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
+            --jq "[.artifacts[] | select(.name == \"${ARTIFACT}\")] | length")"
+          echo "${ARTIFACT} artifacts on run ${RUN_ID}: ${count}"
+          if [ "$count" -gt 0 ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No ${ARTIFACT} artifact on run ${RUN_ID}; the build likely failed before running tests. Skipping the report."
+          fi
+
       # pull-requests: write is deliberately absent — with use-actions-summary: false
       # this publishes a check run and never comments on a PR.
       - uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        if: steps.probe.outputs.found == 'true'
         with:
           artifact: ${{ inputs.artifact }}
           name: ${{ inputs.check-name }}
