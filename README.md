@@ -140,3 +140,44 @@ caller job's. Two consequences, both verified the hard way:
 So the tables above are minimums *and* requirements. `node-build.yml` needs
 `id-token: write` from every caller even when `run-codecov` is false, because a static
 permissions block cannot vary with an input.
+
+## Required checks: what the gate is called
+
+A ruleset matches a check run by its **exact name**, and that name depends on how the job
+is wired — not on what the workflow is called:
+
+| How the job is declared | Resulting check-run name |
+|---|---|
+| Caller stub — `jobs.build.uses: labelzoom/.github/.github/workflows/gradle-build.yml@v1` | `build / Build and Test` — the **caller's job id**, then the called job's `name:` |
+| Inline job in the consumer — `jobs.build.name: Build and Test` | `Build and Test` — no prefix |
+
+The convention is **job id `build`, display name `Build and Test`**. A repo on a caller
+stub is therefore gated on `build / Build and Test`; a repo keeping its build inline is
+gated on the bare `Build and Test`. Both are correct — there is no need to make the two
+match, because rulesets are per-repo.
+
+Resolve the name from a real pull request rather than by reading YAML. This is the step
+that gets skipped and then costs an afternoon:
+
+```sh
+sha=$(gh api "repos/<owner>/<repo>/pulls?state=all&per_page=1" --jq '.[0].head.sha')
+gh api "repos/<owner>/<repo>/commits/$sha/check-runs?per_page=100" \
+  --jq '[.check_runs[].name] | unique'
+```
+
+**Never mark these required:**
+
+- **`codecov/patch`** — third-party and coverage-sensitive. It blocks merges on coverage
+  noise rather than on correctness.
+- **Any path-filtered check.** A required check that is path-filtered never reports on a
+  pull request touching no matching paths, and that pull request can then never merge. A
+  repo that wants a required check needs one that runs on *every* pull request.
+- **A deploy check from outside Actions.** Those report on their own schedule and are not
+  a build gate.
+
+**Not every consumer can move to a caller stub, and that is fine.** `gradle-build.yml` has
+no way to express job-level `services:` containers, an arbitrary pre-build step, or extra
+environment beyond `PACKAGES_*` — a job-level `services:` block in particular cannot be
+passed in from a caller at all. A consumer needing any of those keeps its build inline on
+purpose and is gated on the unprefixed name. Adding those knobs here to suit one consumer
+would bloat a workflow that 16 repos execute.
