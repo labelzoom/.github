@@ -2,7 +2,7 @@ name: Gradle Publish
 
 # Reusable. Called by the 11 Java repos' gradle-publish.yml stubs on `release: created`.
 #
-# Collapses the drift catalogued in the July 2026 audit: permissions present/absent,
+# Collapses the drift cataloged in the July 2026 audit: permissions present/absent,
 # `build` vs `publish` job id, 4- vs 6-space indentation, setup-java v5.4.0/v5.5.0/v5.6.0,
 # checkout v7.0.0/v7.0.1.
 
