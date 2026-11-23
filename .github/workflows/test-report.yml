@@ -76,7 +76,14 @@ jobs:
 
       # pull-requests: write is deliberately absent — with use-actions-summary: false
       # this publishes a check run and never comments on a PR.
-      - uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
+      #
+      # Pinned to an UNRELEASED commit on upstream main, not a tag. v3.2.0 fails
+      # intermittently: GitHub can 404 the checks.update that follows checks.create,
+      # and the step dies leaving the check run it just created in_progress, so the
+      # PR shows "JUnit Tests" running forever (dorny/test-reporter#866). #867
+      # retries that 404, and 5xx/429 on every call, but no release carries it yet.
+      # Move back to a tag once v3.3.0 or later ships.
+      - uses: dorny/test-reporter@79b4b4400dc2354b89e9dd811ef9caa9bdd4f665 # main 2026-11-14, after v3.2.0 (#867)
         if: steps.probe.outputs.found == 'true'
         with:
           artifact: ${{ inputs.artifact }}
